@@ -1,0 +1,49 @@
+#include <iostream>
+#include <random>
+#include <cmath>
+#include <chrono>
+#include <omp.h>
+
+using namespace std;
+
+double MonteCarlo(int N) {
+  // Set up the random number generator
+  random_device rd;
+  mt19937 gen(rd());
+  uniform_real_distribution<double> dis(-1.0, 1.0);
+
+  // Perform the Monte Carlo simulation in parallel using OpenMP
+  double count = 0.0;
+  #pragma omp parallel for reduction(+:count)
+  for (int i = 0; i < N; i++) {
+    double x = dis(gen);
+    double y = dis(gen);
+    if (x*x + y*y <= 1.0) {
+      count += 1.0;
+    }
+  }
+
+  // Calculate the estimated value of pi
+  double pi = 4.0 * count / N;
+  return pi;
+}
+
+int main() {
+  int N = 10000000;
+  int num_threads = omp_get_max_threads();
+
+  // Start the timer
+  auto start_time = chrono::high_resolution_clock::now();
+
+  // Perform the Monte Carlo simulation in parallel
+  double pi = MonteCarlo(N);
+
+  // Stop the timer and print the results
+  auto end_time = chrono::high_resolution_clock::now();
+  auto duration = chrono::duration_cast<chrono::milliseconds>(end_time - start_time).count();
+  cout << "Estimated value of pi: " << pi << endl;
+  cout << "Elapsed time: " << duration << " ms" << endl;
+  cout << "Number of threads: " << num_threads << endl;
+
+  return 0;
+}
