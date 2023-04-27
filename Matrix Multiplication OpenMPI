@@ -1,0 +1,53 @@
+#include <iostream>
+#include <mpi.h>
+
+#define N 1000
+
+using namespace std;
+
+int main(int argc, char** argv) {
+  int A[N][N], B[N][N], C[N][N];
+  int rank, size;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  int row_start = rank * N / size;
+  int row_end = (rank + 1) * N / size;
+
+  // Initialize matrices A and B
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      A[i][j] = i + j;
+      B[i][j] = i - j;
+      C[i][j] = 0;
+    }
+  }
+
+  // Matrix multiplication using OpenMPI
+  for (int i = row_start; i < row_end; i++) {
+    for (int j = 0; j < N; j++) {
+      for (int k = 0; k < N; k++) {
+        C[i][j] += A[i][k] * B[k][j];
+      }
+    }
+  }
+
+  // Combine results using MPI_Reduce
+  MPI_Reduce(&C[row_start][0], NULL, N*N/size, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  // Print the result matrix C from rank 0 process
+  if (rank == 0) {
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        cout << C[i][j] << " ";
+      }
+      cout << endl;
+    }
+  }
+
+  MPI_Finalize();
+
+  return 0;
+}
