@@ -1,0 +1,84 @@
+#include <iostream>
+#include <vector>
+#include <mpi.h>
+
+using namespace std;
+
+void parallel_merge_sort(vector<int>& v, int rank, int size, int start, int end);
+void merge(vector<int>& v, vector<int>& temp, int start, int mid, int end);
+
+int main(int argc, char* argv[]) {
+  int rank, size;
+  vector<int> v = {5, 1, 4, 2, 8, 9, 3, 6, 7, 0};
+  int n = v.size();
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  // Compute the range of indices to sort
+  int start = rank * (n / size);
+  int end = (rank + 1) * (n / size) - 1;
+  if (rank == size - 1) end = n - 1;
+
+  // Perform parallel merge sort
+  parallel_merge_sort(v, rank, size, start, end);
+
+  // Gather the sorted subarrays and merge them into the final result
+  if (rank == 0) {
+    vector<int> sorted(n);
+    int subarray_size = n / size;
+    vector<int> subarray(subarray_size);
+    MPI_Status status;
+    for (int i = 0; i < size; i++) {
+      int source = i;
+      int recv_start = source * subarray_size;
+      MPI_Recv(&subarray[0], subarray_size, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
+      merge(sorted, subarray, recv_start, recv_start + subarray_size/2, recv_start + subarray_size - 1);
+    }
+    for (int i = 0; i < n; i++) {
+      cout << sorted[i] << " ";
+    }
+    cout << endl;
+  } else {
+    MPI_Send(&v[start], end - start + 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+  }
+
+  MPI_Finalize();
+  return 0;
+}
+
+void parallel_merge_sort(vector<int>& v, int rank, int size, int start, int end) {
+  if (start >= end) return;
+  int mid = (start + end) / 2;
+
+  // Recursively sort the left and right halves
+  if (rank < size/2) {
+    parallel_merge_sort(v, rank, size/2, start, mid);
+  } else {
+    parallel_merge_sort(v, rank - size/2, size - size/2, mid + 1, end);
+  }
+
+  // Merge the sorted subarrays
+  vector<int> temp(end - start + 1);
+  merge(v, temp, start, mid + 1, end);
+
+  // Copy the merged subarray back into the original array
+  for (int i = start; i <= end; i++) {
+    v[i] = temp[i - start];
+  }
+}
+
+void merge(vector<int>& v, vector<int>& temp, int start, int mid, int end) {
+  int i = start, j = mid, k = 0;
+  while (i < mid && j <= end) {
+    if (v[i] < v[j]) {
+      temp[k++] = v[i++];
+    } else {
+      temp[k++] = v[j++];
+    }
+  }
+  while (i < mid) {
+    temp[k++] = v[i++];
+  }
+  while (j
