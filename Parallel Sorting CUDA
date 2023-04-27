@@ -1,0 +1,58 @@
+#include <iostream>
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
+
+#define N 1000000
+
+using namespace std;
+
+// Kernel function for parallel bitonic sort
+__global__ void bitonic_sort(int* d_data, int stage, int pass) {
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  int j = i ^ pass;
+
+  if (j > i) {
+    int swap = (i & stage) ? d_data[j] > d_data[i] : d_data[j] < d_data[i];
+    int temp = d_data[i];
+    d_data[i] = swap ? d_data[j] : d_data[i];
+    d_data[j] = swap ? temp : d_data[j];
+  }
+}
+
+// Host function to initialize data and launch bitonic sort kernel
+void parallel_sort(int* data) {
+  int* d_data;
+  int size = N * sizeof(int);
+  cudaMalloc((void**) &d_data, size);
+  cudaMemcpy(d_data, data, size, cudaMemcpyHostToDevice);
+
+  dim3 grid(N / 512, 1, 1);
+  dim3 block(512, 1, 1);
+
+  // Perform bitonic sort
+  for (int stage = 2; stage <= N; stage *= 2) {
+    for (int pass = stage / 2; pass > 0; pass /= 2) {
+      bitonic_sort<<<grid, block>>>(d_data, stage, pass);
+      cudaDeviceSynchronize();
+    }
+  }
+
+  cudaMemcpy(data, d_data, size, cudaMemcpyDeviceToHost);
+  cudaFree(d_data);
+}
+
+int main() {
+  int data[N];
+  for (int i = 0; i < N; i++) {
+    data[i] = N - i;
+  }
+
+  parallel_sort(data);
+
+  for (int i = 0; i < N; i++) {
+    cout << data[i] << " ";
+  }
+  cout << endl;
+
+  return 0;
+}
