@@ -1,0 +1,58 @@
+#include <iostream>
+#include <algorithm>
+#include <mpi.h>
+#include <openacc.h>
+
+#define N 10000
+
+using namespace std;
+
+int main(int argc, char* argv[]) {
+  int rank, size;
+  int data[N], sorted_data[N], temp_data[N];
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  // Initialize data on process 0
+  if (rank == 0) {
+    for (int i = 0; i < N; i++) {
+      data[i] = rand() % 100;
+    }
+  }
+
+  // Distribute data to all processes
+  MPI_Scatter(data, N/size, MPI_INT, temp_data, N/size, MPI_INT, 0, MPI_COMM_WORLD);
+
+  // Sort the local data using OpenACC
+  #pragma acc parallel loop present(temp_data)
+  for (int i = 0; i < N/size; i++) {
+    for (int j = i+1; j < N/size; j++) {
+      if (temp_data[j] < temp_data[i]) {
+        swap(temp_data[i], temp_data[j]);
+      }
+    }
+  }
+
+  // Gather the sorted local data to process 0
+  MPI_Gather(temp_data, N/size, MPI_INT, sorted_data, N/size, MPI_INT, 0, MPI_COMM_WORLD);
+
+  // Merge the sorted local data on process 0
+  if (rank == 0) {
+    for (int i = 0; i < N; i++) {
+      int min_index = -1;
+      for (int j = 0; j < size; j++) {
+        int index = j*N/size;
+        if (index < (j+1)*N/size && (min_index == -1 || sorted_data[index] < sorted_data[min_index])) {
+          min_index = index;
+        }
+      }
+      data[i] = sorted_data[min_index];
+      sorted_data[min_index] = INT_MAX;
+    }
+  }
+
+  MPI_Finalize();
+  return 0;
+}
