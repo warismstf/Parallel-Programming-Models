@@ -1,0 +1,66 @@
+#include <iostream>
+#include <vector>
+#include <omp.h>
+
+using namespace std;
+
+// Merge two sorted vectors into one sorted vector
+vector<int> merge(vector<int> left, vector<int> right) {
+  vector<int> result;
+  int i = 0, j = 0;
+  while (i < left.size() && j < right.size()) {
+    if (left[i] <= right[j]) {
+      result.push_back(left[i]);
+      i++;
+    } else {
+      result.push_back(right[j]);
+      j++;
+    }
+  }
+  while (i < left.size()) {
+    result.push_back(left[i]);
+    i++;
+  }
+  while (j < right.size()) {
+    result.push_back(right[j]);
+    j++;
+  }
+  return result;
+}
+
+// Parallel merge sort algorithm
+vector<int> merge_sort(vector<int> arr, int num_threads) {
+  if (arr.size() == 1) {
+    return arr;
+  } else {
+    vector<int>::iterator middle = arr.begin() + (arr.size() / 2);
+    vector<int> left(arr.begin(), middle);
+    vector<int> right(middle, arr.end());
+
+    // Parallelize the recursive calls to merge_sort()
+    #pragma omp parallel sections num_threads(num_threads)
+    {
+      #pragma omp section
+      left = merge_sort(left, num_threads/2);
+      #pragma omp section
+      right = merge_sort(right, num_threads/2);
+    }
+    return merge(left, right);
+  }
+}
+
+int main() {
+  int num_threads = omp_get_max_threads();
+  vector<int> arr = {3, 5, 2, 7, 1, 8, 6, 4};
+
+  // Parallel merge sort
+  arr = merge_sort(arr, num_threads);
+
+  // Print the sorted array
+  for (int i = 0; i < arr.size(); i++) {
+    cout << arr[i] << " ";
+  }
+  cout << endl;
+
+  return 0;
+}
