@@ -1,0 +1,45 @@
+#include <iostream>
+#include <random>
+#include <chrono>
+#include <mpi.h>
+
+#define NUM_SAMPLES 1000000
+
+using namespace std;
+
+int main(int argc, char* argv[]) {
+  int rank, size, num_samples_per_proc;
+  double x, y, z, pi_estimate, pi_total = 0;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  // Divide the number of samples evenly among all processes
+  num_samples_per_proc = NUM_SAMPLES / size;
+
+  // Seed the random number generator with the current time and process rank
+  mt19937 rng(chrono::high_resolution_clock::now().time_since_epoch().count() + rank);
+
+  // Generate the samples and estimate pi using Monte Carlo simulation
+  for (int i = 0; i < num_samples_per_proc; i++) {
+    x = uniform_real_distribution<double>(-1.0, 1.0)(rng);
+    y = uniform_real_distribution<double>(-1.0, 1.0)(rng);
+    z = x*x + y*y;
+    if (z <= 1) {
+      pi_total++;
+    }
+  }
+
+  // Reduce the pi estimates from all processes to get the final estimate
+  MPI_Reduce(&pi_total, &pi_estimate, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+  // Calculate the final estimate of pi on process 0 and print it
+  if (rank == 0) {
+    pi_estimate = 4*pi_estimate / NUM_SAMPLES;
+    cout << "The estimate of pi is " << pi_estimate << endl;
+  }
+
+  MPI_Finalize();
+  return 0;
+}
